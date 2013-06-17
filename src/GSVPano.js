@@ -13,30 +13,22 @@ GSVPANO.PanoLoader = function (parameters) {
 		_canvas = document.createElement('canvas'),
 		_ctx = _canvas.getContext('2d'),
 		rotation = 0,
-		copyright = '',
-		onSizeChange = null,
-		onPanoramaLoad = null;
-		
-	this.setProgress = function (p) {
-	
-		if (this.onProgress) {
-			this.onProgress(p);
-		}
-		
-	};
+        self = this;
 
-	this.throwError = function (message) {
-	
-		if (this.onError) {
-			this.onError(message);
-		} else {
-			console.error(message);
-		}
-		
-	};
+    //override to receive progress events during load
+    this.onProgress = function(p){};
+    //override to custom handle errors
+    this.onError = function(){
+        console.error(message);
+    };
+    //ovverride to get notified when the panorama has loaded
+    this.onPanoramaLoad = function(){};
+    //override to get events when panorama failed to load data
+    this.onNoPanoramaData = function(status){};
 
+
+    //adapt the texture to the current zoom level
 	this.adaptTextureToZoom = function () {
-	
 		var w = 416 * Math.pow(2, _zoom),
 			h = (416 * Math.pow(2, _zoom - 1));
 		_canvas.width = w;
@@ -45,31 +37,30 @@ GSVPANO.PanoLoader = function (parameters) {
 		_ctx.scale(-1, 1);
 	};
 
+    //place a single tile of the panorama into the stitched canvas
 	this.composeFromTile = function (x, y, texture) {
-	
 		_ctx.drawImage(texture, x * 512, y * 512);
 		_count++;
 		
 		var p = Math.round(_count * 100 / _total);
-		this.setProgress(p);
+		self.onProgress(p);
 		
 		if (_count === _total) {
 			this.canvas = _canvas;
-			if (this.onPanoramaLoad) {
-				this.onPanoramaLoad();
-			}
+			this.onPanoramaLoad();
 		}
 		
 	};
 
+    //load the individual tiles and paint to their corresponding location
+    //on the canvas
 	this.composePanorama = function () {
 	
-		this.setProgress(0);
+		this.onProgress(0);
 		console.log('Loading panorama for zoom ' + _zoom + '...');
 		
 		var w = Math.pow(2, _zoom),
 			h = Math.pow(2, _zoom - 1),
-			self = this,
 			url,
 			x,
 			y;
@@ -93,28 +84,36 @@ GSVPANO.PanoLoader = function (parameters) {
 		
 	};
 	
-	this.load = function (location) {
-	
+    /**
+     * load the panorama for the provided location
+     * @param {google.maps.LatLng} location the geographic location to load
+     * @param {Number} [radius] radius to search for closest (in meters), defaults to 50 meters
+     */
+	this.load = function (location, radius) {
+        radius = radius || 50;
 		console.log('Load for', location);
-		var self = this;
-		_panoClient.getPanoramaByLocation(location, 50, function (result, status) {
+		_panoClient.getPanoramaByLocation(location, radius, function (result, status) {
 			if (status === google.maps.StreetViewStatus.OK) {
-				if( self.onPanoramaData ) self.onPanoramaData( result );
+				self.onPanoramaData( result );
 				var h = google.maps.geometry.spherical.computeHeading(location, result.location.latLng);
 				rotation = (result.tiles.centerHeading - h) * Math.PI / 180.0;
-				copyright = result.copyright;
+                //expose the copyright info on the instance
 				self.copyright = result.copyright;
 				_panoId = result.location.pano;
 				self.location = location;
 				self.composePanorama();
 			} else {
-				if( self.onNoPanoramaData ) self.onNoPanoramaData( status );
-				self.throwError('Could not retrieve panorama for the following reason: ' + status);
+				self.onNoPanoramaData( status );
+			    self.onError('Could not retrieve panorama for the following reason: ' + status);
 			}
 		});
 		
 	};
 	
+    /**
+     * set the zoom level for the panorama
+     * @param {Number} z the zoom level
+     */
 	this.setZoom = function( z ) {
 		_zoom = z;
 		this.adaptTextureToZoom();
