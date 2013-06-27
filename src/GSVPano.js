@@ -74,7 +74,7 @@ GSVPANO.PanoLoader = function (parameters) {
                         if (_count === _total) {
                             self.canvas = _canvas;
                             self.onPanoramaLoad();
-                            callback( null, canvas );
+                            callback( null, _canvas );
                         }	
 					});
 					img.crossOrigin = '';
@@ -91,12 +91,17 @@ GSVPANO.PanoLoader = function (parameters) {
      * @param {Function} callback receives param signature `( err, canvas )` with `this` in scope of the PanoLoader instance
      */
 	this.load = function ( location, callback ) {
+        callback = callback || function(){};
 		console.log('Load for', location);
         self.find( location, function( err, pano ){
             if(err){
                 return;
             }
-            self.composePanorama( pano.id, callback );
+            self.composePanorama( pano.id, function( err, canvas ){
+                pano.canvas = canvas;
+                //the callback has `this` in scope of the response from find()
+                callback.call(pano, err, canvas, pano);
+            });
         });
 	};
 
